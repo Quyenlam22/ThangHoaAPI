@@ -3,19 +3,38 @@ const route = express.Router();
 const multer = require("multer");
 
 const controller = require('../controllers/product.controller');
+const uploadCloud = require("../middleware/uploadCloud.middleware");
 
-// const uploadCloud = require("../middleware/uploadCloud.middleware");
+const upload = multer();
 
-// const upload = multer();
-
+// [GET] /api/v1/products
+// Lấy toàn bộ danh sách sản phẩm
 route.get("/", controller.getAllProducts);
 
-// route.post("/create", upload.single("avatar"), uploadCloud.uploadSingle, controller.create);
+// [POST] /api/v1/products/create
+// Tạo sản phẩm mới kèm upload ảnh lên Cloudinary (Dùng field name "avatar" theo mẫu của bạn)
+route.post(
+  "/create", 
+  upload.single("avatar"), 
+  uploadCloud.uploadSingle, 
+  controller.create
+);
 
-// route.patch("/update/:id", upload.single("avatar"), uploadCloud.uploadSingle, controller.update);
+// [PATCH] /api/v1/products/update/:id
+// Chỉnh sửa thông tin sản phẩm và cập nhật lại ảnh mới
+route.patch(
+  "/update/:id", 
+  upload.single("avatar"), 
+  uploadCloud.uploadSingle, 
+  controller.update
+);
 
-// route.delete("/delete/:id", upload.single("avatar"), uploadCloud.uploadSingle, controller.delete);
+// [DELETE] /api/v1/products/delete/:id
+// Xóa mềm sản phẩm (Chuyển deleted thành true)
+route.delete("/delete/:id", controller.delete);
 
-// route.post("/get-products-by-ids", controller.getProductsByIds);
+// [POST] /api/v1/products/by-ids
+// Lấy danh sách sản phẩm dựa vào mảng các ID truyền lên (Dùng cho giỏ hàng/hóa đơn)
+route.post("/by-ids", controller.getProductsByIds);
 
 module.exports = route;

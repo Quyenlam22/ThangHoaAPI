@@ -3,19 +3,33 @@ const route = express.Router();
 const multer = require("multer");
 
 const controller = require('../controllers/category.controller');
+const uploadCloud = require("../middleware/uploadCloud.middleware");
 
-// const uploadCloud = require("../middleware/uploadCloud.middleware");
+const upload = multer();
 
-// const upload = multer();
-
+// [GET] /api/v1/categories - Lấy tất cả danh mục
 route.get("/", controller.getAllCategories);
 
-// route.post("/create", upload.single("avatar"), uploadCloud.uploadSingle, controller.create);
+// [POST] /api/v1/categories/create - Tạo danh mục mới kèm upload ảnh
+route.post(
+  "/create", 
+  upload.single("avatar"), 
+  uploadCloud.uploadSingle, 
+  controller.create
+);
 
-// route.patch("/update/:id", upload.single("avatar"), uploadCloud.uploadSingle, controller.update);
+// [PATCH] /api/v1/categories/update/:id - Chỉnh sửa danh mục kèm upload ảnh
+route.patch(
+  "/update/:id", 
+  upload.single("avatar"), 
+  uploadCloud.uploadSingle, 
+  controller.update
+);
 
-// route.delete("/delete/:id", upload.single("avatar"), uploadCloud.uploadSingle, controller.delete);
+// [DELETE] /api/v1/categories/delete/:id - Xóa mềm danh mục
+route.delete("/delete/:id", controller.delete);
 
-// route.post("/get-categories-by-ids", controller.getCategoriesByIds);
+// [POST] /api/v1/categories/by-ids - Lấy các danh mục theo danh sách ID
+route.post("/by-ids", controller.getCategoriesByIds);
 
 module.exports = route;
