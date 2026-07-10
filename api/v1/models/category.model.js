@@ -14,6 +14,10 @@ const categorySchema = new mongoose.Schema({
         slug: "title",
         unique: true
     },
+    avatar: {
+        type: String,
+        default: "" // Đặt mặc định là chuỗi rỗng nếu danh mục không có ảnh
+    },
     status: {
         type: String,
         enum: ["active", "inactive"],

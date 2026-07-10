@@ -9,6 +9,13 @@ database.connect();
 const app = express();
 const port = 3002;
 
+const cors = require('cors');
+app.use(cors());
+// app.use(cors({
+//   origin: 'http://localhost:3000',
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+// }));
+
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: true }));
 

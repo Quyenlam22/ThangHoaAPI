@@ -57,7 +57,7 @@ module.exports.update = async (req, res) => {
       }
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(id, dataUpdate, { new: true });
+    const updatedProduct = await Product.findByIdAndUpdate(id, dataUpdate, { returnDocument: 'after' });
 
     if (!updatedProduct) {
       return res.status(404).json({ success: false, message: "No product found!" });
@@ -86,7 +86,7 @@ module.exports.delete = async (req, res) => {
         deleted: true,
         deletedAt: now
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!deletedProduct) {

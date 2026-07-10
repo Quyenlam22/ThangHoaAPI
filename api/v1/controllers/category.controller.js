@@ -40,7 +40,7 @@ module.exports.update = async (req, res) => {
     const dataUpdate = { ...req.body };
 
     // Cập nhật danh mục
-    const updatedCategory = await Category.findByIdAndUpdate(id, dataUpdate, { new: true });
+    const updatedCategory = await Category.findByIdAndUpdate(id, dataUpdate, { returnDocument: 'after' });
 
     if (!updatedCategory) {
       return res.status(404).json({ success: false, message: "No category found!" });
@@ -81,7 +81,7 @@ module.exports.delete = async (req, res) => {
         deleted: true,
         deletedAt: now
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!deletedCategory) {
