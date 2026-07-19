@@ -4,7 +4,7 @@ const Review = require("../models/review.model");
 // Lấy toàn bộ danh sách đánh giá chưa bị xóa
 module.exports.getAllReviews = async (req, res) => {
   try {
-    const data = await Review.find({ deleted: false }).sort({ createdAt: -1 });
+    const data = await Review.find({ deleted: false }).sort({ isAdmin: -1, createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -125,3 +125,34 @@ module.exports.reply = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// [DELETE] /api/v1/reviews/delete-reply/:reviewId/:replyId
+// Xóa một phản hồi của đánh giá
+module.exports.deleteReply = async (req, res) => {
+  try {
+    const { reviewId, replyId } = req.params;
+
+    const updatedReview = await Review.findByIdAndUpdate(
+      reviewId,
+      {
+        $pull: {
+          replies: { _id: replyId }
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedReview) {
+      return res.status(404).json({ success: false, message: "Review not found!" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Reply deleted successfully!",
+      data: updatedReview
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

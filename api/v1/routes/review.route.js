@@ -18,4 +18,7 @@ route.patch("/reply/:id", controller.reply);
 // [DELETE] /api/v1/reviews/delete/:id
 route.delete("/delete/:id", controller.delete);
 
+// [DELETE] /api/v1/reviews/delete-reply/:reviewId/:replyId
+route.delete("/delete-reply/:reviewId/:replyId", controller.deleteReply);
+
 module.exports = route;

@@ -26,6 +26,15 @@ const reviewSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    isAdmin: {
+        type: Boolean,
+        default: false
+    },
+    postType: {
+        type: String,
+        enum: ["customer_review", "store_recommendation", "store_announcement", "store_offer"],
+        default: "customer_review"
+    },
     replies: [
         {
             name: { type: String, required: true, trim: true },
