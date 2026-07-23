@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Chat = require("../models/chatbot.model");
 const Product = require("../models/product.model");
 const Category = require("../models/category.model");
@@ -9,17 +10,79 @@ module.exports.chatbot = async (req, res) => {
       return res.status(400).json({ error: "Message required" });
     }
 
+    const categoryCol = Category.collection;
+
+    // 1. Dựng thực đơn chính thức từ DB để dạy chatbot
+    const allProducts = await Product.find({ deleted: false, status: "active" }).select("title categoryId price").lean();
+
+    const catalogMap = {};
+    for (const p of allProducts) {
+      let catTitle = "Chưa rõ";
+      if (p.categoryId) {
+        let catIdStr = "";
+        if (typeof p.categoryId === "string") {
+          catIdStr = p.categoryId;
+        } else if (p.categoryId.$oid) {
+          catIdStr = p.categoryId.$oid;
+        } else {
+          catIdStr = p.categoryId.toString();
+        }
+
+        // Truy vấn trực tiếp từ MongoDB collection để lấy danh mục chính xác
+        let categoryDoc = await categoryCol.findOne({ _id: catIdStr });
+        if (!categoryDoc) {
+          try {
+            const objId = new mongoose.Types.ObjectId(catIdStr);
+            categoryDoc = await categoryCol.findOne({ _id: objId });
+          } catch (e) {}
+        }
+
+        if (!categoryDoc) {
+          // Dự phòng mapping cũ/mới nếu DB chưa đồng bộ hết
+          const oldToNew = {
+            "6a492965803731dcd37c44ef": "64a1b2c3d4e5f67890abcdef",
+            "6a492965803731dcd37c44f0": "64a1b2c3d4e5f67890abcdeg",
+            "6a492965803731dcd37c44f1": "64a1b2c3d4e5f67890abcdeh",
+            "6a492965803731dcd37c44f2": "64a1b2c3d4e5f67890abcdei"
+          };
+          const fallbackId = oldToNew[catIdStr];
+          if (fallbackId) {
+            categoryDoc = await categoryCol.findOne({ _id: fallbackId });
+            if (!categoryDoc) {
+              try {
+                const objId = new mongoose.Types.ObjectId(fallbackId);
+                categoryDoc = await categoryCol.findOne({ _id: objId });
+              } catch (e) {}
+            }
+          }
+        }
+
+        if (categoryDoc) {
+          catTitle = categoryDoc.title;
+        }
+      }
+      
+      if (!catalogMap[catTitle]) {
+        catalogMap[catTitle] = [];
+      }
+      catalogMap[catTitle].push(`${p.title}${p.price ? ` (${p.price.toLocaleString()} đ)` : ""}`);
+    }
+
+    const catalogText = Object.entries(catalogMap)
+      .map(([catName, list]) => `- Danh mục ${catName}: ${list.join(", ")}`)
+      .join("\n");
+
     let productContext = "";
     const lowerText = text ? text.toLowerCase() : "";
 
-    // Fetch active categories
-    const categories = await Category.find({ deleted: false, status: "active" }).select("_id title slug");
+    // Lấy danh mục để kiểm tra tìm kiếm
+    const categories = await Category.find({ deleted: false, status: "active" }).select("_id title slug").lean();
 
     // Check if user is asking about a specific category
     let matchedCategoryId = null;
     for (const cat of categories) {
       const catTitle = cat.title.toLowerCase();
-      if (lowerText.includes(catTitle) || lowerText.includes(cat.slug.replace(/-/g, " "))) {
+      if (lowerText.includes(catTitle) || (cat.slug && lowerText.includes(cat.slug.replace(/-/g, " ")))) {
         matchedCategoryId = cat._id;
         break;
       }
@@ -44,32 +107,93 @@ module.exports.chatbot = async (req, res) => {
     if (hasSearch) {
       const suggestedProducts = await Product.find(queryConditions)
         .limit(5)
-        .populate("categoryId", "title")
-        .select("title avatar slug _id categoryId description price");
+        .select("title avatar slug _id categoryId description price")
+        .lean();
 
       if (suggestedProducts.length > 0) {
-        const productsMetadata = suggestedProducts.map((p, index) => JSON.stringify({
-          type: "product_link",
-          index: index + 1,
-          title: p.title,
-          avatar: p.avatar,
-          categoryName: p.categoryId ? p.categoryId.title : "Chưa rõ",
-          slug: p.slug,
-          _id: p._id,
-          description: p.description || "",
-          price: p.price || 0
-        }));
+        const productsMetadata = [];
+        
+        for (let i = 0; i < suggestedProducts.length; i++) {
+          const p = suggestedProducts[i];
+          let catName = "Chưa rõ";
+          
+          if (p.categoryId) {
+            let catIdStr = "";
+            if (typeof p.categoryId === "string") {
+              catIdStr = p.categoryId;
+            } else if (p.categoryId.$oid) {
+              catIdStr = p.categoryId.$oid;
+            } else {
+              catIdStr = p.categoryId.toString();
+            }
+
+            // Truy vấn trực tiếp category từ DB bằng raw collection (để tránh Cast to ObjectId của mongoose)
+            let categoryDoc = await categoryCol.findOne({ _id: catIdStr });
+            if (!categoryDoc) {
+              try {
+                const objId = new mongoose.Types.ObjectId(catIdStr);
+                categoryDoc = await categoryCol.findOne({ _id: objId });
+              } catch (e) {}
+            }
+
+            if (!categoryDoc) {
+              // Tìm kiếm ID ánh xạ tương ứng
+              const oldToNew = {
+                "6a492965803731dcd37c44ef": "64a1b2c3d4e5f67890abcdef",
+                "6a492965803731dcd37c44f0": "64a1b2c3d4e5f67890abcdeg",
+                "6a492965803731dcd37c44f1": "64a1b2c3d4e5f67890abcdeh",
+                "6a492965803731dcd37c44f2": "64a1b2c3d4e5f67890abcdei"
+              };
+              const newToOld = {
+                "64a1b2c3d4e5f67890abcdef": "6a492965803731dcd37c44ef",
+                "64a1b2c3d4e5f67890abcdeg": "6a492965803731dcd37c44f0",
+                "64a1b2c3d4e5f67890abcdeh": "6a492965803731dcd37c44f1",
+                "64a1b2c3d4e5f67890abcdei": "6a492965803731dcd37c44f2"
+              };
+              const fallbackId = oldToNew[catIdStr] || newToOld[catIdStr];
+              if (fallbackId) {
+                categoryDoc = await categoryCol.findOne({ _id: fallbackId });
+                if (!categoryDoc) {
+                  try {
+                    const objId = new mongoose.Types.ObjectId(fallbackId);
+                    categoryDoc = await categoryCol.findOne({ _id: objId });
+                  } catch (e) {}
+                }
+              }
+            }
+
+            if (categoryDoc) {
+              catName = categoryDoc.title;
+            }
+          }
+
+          productsMetadata.push(JSON.stringify({
+            type: "product_link",
+            index: i + 1,
+            title: p.title,
+            avatar: p.avatar,
+            categoryName: catName,
+            slug: p.slug,
+            _id: p._id,
+            description: p.description || "",
+            price: p.price || 0
+          }));
+        }
 
         productContext = `\n[Dữ liệu hệ thống - Metadata]:\n${productsMetadata.join("\n")}`;
       }
     }
 
     const systemPrompt = `Bạn là Thăng Hoa Banquet AI Assistant - Trợ lý ảo hỗ trợ khách hàng của Nhà hàng Thăng Hoa (chuyên tiệc, buffet, đồ đồng quê, hải sản tươi sống và thực phẩm chế biến sẵn).
+
+[Thực đơn chính thức của Nhà hàng Thăng Hoa]:
+${catalogText || "- Đang cập nhật..."}
+
 QUY TẮC BẮT BUỘC:
-1. Khi có danh sách món ăn trong [Dữ liệu hệ thống - Metadata], bạn PHẢI liệt kê ĐẦY ĐỦ tất cả các món ăn có trong đó, không được bỏ sót bất kỳ món nào. Tuyệt đối không được tự ý giới thiệu món ăn khác không nằm trong Metadata hoặc không có trong thực đơn của nhà hàng (như tôm hùm Alaska, cua hoàng đế, v.v.).
-2. Với mỗi món ăn được đề xuất trong Metadata, hãy copy nguyên văn dòng JSON (VD: {"type": "product_link", ...}) sang một dòng mới trong câu trả lời của bạn để hệ thống hiển thị dưới dạng thẻ sản phẩm trực quan.
+1. Khi tư vấn, giới thiệu hoặc trả lời khách hàng, bạn CHỈ ĐƯỢC PHÉP gợi ý các món ăn nằm trong [Thực đơn chính thức của Nhà hàng Thăng Hoa] ở trên. Tuyệt đối không tự bịa hoặc giới thiệu các món ăn không có trong thực đơn (Ví dụ: Không được gợi ý tôm hùm Alaska, cua hoàng đế, bào ngư nếu thực đơn ở trên không có).
+2. Khi có danh sách món ăn trong [Dữ liệu hệ thống - Metadata] ở dưới, bạn PHẢI liệt kê ĐẦY ĐỦ tất cả các món ăn có trong đó, không được bỏ sót bất kỳ món nào. Với mỗi món ăn được đề xuất trong Metadata, hãy copy nguyên văn dòng JSON (VD: {"type": "product_link", ...}) sang một dòng mới trong câu trả lời của bạn để hệ thống hiển thị dưới dạng thẻ sản phẩm trực quan.
 3. Tuyệt đối không được thay đổi nội dung bên trong các dấu ngoặc nhọn {}.
-4. Luôn trả lời bằng Tiếng Việt một cách nhiệt tình, thân thiện, lễ phép. Hướng dẫn khách hàng liên hệ Hotline: 0982453072 / 0397109276 hoặc quét mã QR ở chân trang để đặt tiệc/bàn nhanh chóng nếu họ có nhu cầu.
+4. Luôn trả lời bằng Tiếng Việt một cách nhiệt tình, thân thiện, lễ phép. Hướng dẫn khách hàng liên hệ Hotline: 0982453072 / 0397109276 hoặc nhắn tin qua Messenger để đặt tiệc/bàn nhanh chóng nếu họ có nhu cầu.
 5. Luôn bắt đầu bằng một lời chào/lời dẫn ấm áp và kết thúc bằng một câu hỏi gợi mở thân thiện.`;
 
     const chatHistory = await Chat.find({})

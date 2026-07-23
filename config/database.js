@@ -8,4 +8,6 @@ module.exports.connect = () => {
   }
 }
 
-mongoose.connect(process.env.MONGO_URL);
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB kết nối thành công!"))
+  .catch(err => console.error("Lỗi kết nối MongoDB:", err.message));
